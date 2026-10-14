@@ -5,7 +5,10 @@ app.registerExtension({
     async function connect() {
       if (window.__DSH_COMFYUI_BRIDGE_ACTIVE__) return;
       const configured = new URLSearchParams(location.search).get('dsh_bridge');
-      const bridgeBase = configured || __DSH_DEFAULT_BRIDGE__;
+      const bridgeBase = configured || (typeof __DSH_DEFAULT_BRIDGE__ === 'string' ? __DSH_DEFAULT_BRIDGE__ : null);
+      // A portable custom_nodes copy has no default on ordinary ComfyUI pages.
+      // The dsh panel supplies dsh_bridge; standalone pages can safely do nothing.
+      if (!bridgeBase) return;
       try {
         const response = await fetch(bridgeBase + '/__dsh_comfyui/bootstrap');
         if (!response.ok) throw new Error('Bridge unavailable');

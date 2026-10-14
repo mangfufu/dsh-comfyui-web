@@ -10,6 +10,8 @@
 dsh plugin --profile web add github:mangfufu/dsh-comfyui-web
 ```
 
+<a id="comfyui-extension-install"></a>
+
 <details>
 <summary>首次安装时，填写 ComfyUI 前端目录</summary>
 
@@ -23,6 +25,43 @@ dsh plugin --profile web add github:mangfufu/dsh-comfyui-web
 ```
 
 首次安装或更新后，先保存工作流，再刷新已打开的 ComfyUI 原网页和 dsh 内的面板。
+目录未配置或写入失败时，面板的 **MCP 设置**和 dsh 启动日志会提示原因。能看到 ComfyUI 网页，还需等到 **MCP · 共享画布已连接** 才能让 AI 操作。
+
+</details>
+
+<details>
+<summary>Docker / WSL 中的 ComfyUI</summary>
+
+推荐使用已经持久化挂载的 `custom_nodes` 目录。编辑运行 dsh 的系统中的 `~/.dsh/comfyui/config.json`：
+
+```json
+{
+  "url": "http://127.0.0.1:8188",
+  "customNodesDir": "/mnt/data/ai/comfyui/storage-nodes/custom_nodes"
+}
+```
+
+上面是 Linux 路径示例。**dsh 在 Windows 运行时，应填写 Windows 能写入的路径**，例如 `D:/ComfyUI/custom_nodes`，或实际 WSL 发行版的共享目录 `//wsl.localhost/Ubuntu/mnt/data/ai/comfyui/storage-nodes/custom_nodes`。
+
+确认对应宿主目录已挂载到容器的 `custom_nodes`，例如：
+
+```yaml
+volumes:
+  - /mnt/data/ai/comfyui/storage-nodes/custom_nodes:/root/ComfyUI/custom_nodes
+```
+
+启动 dsh 后会生成 `dsh-comfyui-bridge` 扩展。先保存工作流，再重启 ComfyUI、刷新 dsh 面板。扩展保存在挂载目录中，容器重建后仍保留。
+
+`customNodesDir` 与 `frontendExtensionsDir` 二选一。如果沿用前端目录方式，目录同样必须是 **dsh 可写、容器可见** 的持久化挂载路径，不能直接填写容器内的 `/usr/local/...` 路径。
+
+如果 Windows 无法直接访问挂载目录，也可在该目录手动创建 `dsh-comfyui-bridge/__init__.py`：
+
+```python
+WEB_DIRECTORY = "./web"
+NODE_CLASS_MAPPINGS = {}
+```
+
+再将插件中的 `comfy-extension.js` 复制为 `dsh-comfyui-bridge/web/loader.js`，重启 ComfyUI。从 dsh 面板打开时会自动取得桥接地址，无需编辑脚本。手动安装完成并连接后，可忽略宿主的“尚未配置”日志提示。
 
 </details>
 

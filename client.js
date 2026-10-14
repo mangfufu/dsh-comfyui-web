@@ -318,6 +318,8 @@ window.__ModuleLoader__.load({ id: 'dsh-comfyui-web', factory: require => {
     const [connection, setConnection] = useState(null);
     const [url, setUrl] = useState('http://127.0.0.1:8188');
     const [ready, setReady] = useState(false);
+    const [bridgeSeen, setBridgeSeen] = useState(false);
+    const [bridgeWaitExpired, setBridgeWaitExpired] = useState(false);
     const [error, setError] = useState('');
     const [settings, setSettings] = useState(false);
     const [epoch, setEpoch] = useState(0);
@@ -348,6 +350,7 @@ window.__ModuleLoader__.load({ id: 'dsh-comfyui-web', factory: require => {
       if (!connection) return;
       const receive = event => {
         if (event.origin !== new URL(connection.url).origin || event.source !== frame.current?.contentWindow || event.data?.source !== 'dsh-comfyui' || event.data.clientId !== clientId.current) return;
+        setBridgeSeen(true);
         setReady(event.data.ready === true);
         if (event.data.warning) setError(event.data.warning); else if (event.data.ready) setError(''); else if (event.data.error) setError(event.data.error);
         sendState();
@@ -356,6 +359,12 @@ window.__ModuleLoader__.load({ id: 'dsh-comfyui-web', factory: require => {
       const heartbeat = setInterval(sendState, 1000);
       return () => { window.removeEventListener('message', receive); clearInterval(heartbeat); };
     }, [connection]);
+    useEffect(() => {
+      setReady(false); setBridgeSeen(false); setBridgeWaitExpired(false);
+      if (!connection) return;
+      const timer = setTimeout(() => setBridgeWaitExpired(true), 12000);
+      return () => clearTimeout(timer);
+    }, [connection?.url, connection?.frameOrigin, connection?.token, epoch]);
     useEffect(() => {
       sendState();
     }, [mcpEnabled, tab.visible, connection]);
@@ -379,10 +388,15 @@ window.__ModuleLoader__.load({ id: 'dsh-comfyui-web', factory: require => {
       catch { setError('复制失败，请选中下方配置手动复制。'); }
     }
     const src = connection ? connection.url + '/?dsh_client=' + encodeURIComponent(clientId.current) + '&dsh_session=' + encodeURIComponent(sessionId) + '&dsh_bridge=' + encodeURIComponent(connection.frameOrigin) : null;
+    const bridgeMissing = connection && mcpEnabled && !bridgeSeen && bridgeWaitExpired;
+    const installation = connection?.extensionInstallation;
+    const installationHelp = installation?.status === 'failed' || installation?.status === 'unconfigured'
+      ? installation.message : '尚未收到 AI 桥接扩展连接。请确认 ComfyUI 可访问、已安装扩展；首次安装后重启 ComfyUI 并刷新面板。Docker 用户需确认扩展所在目录已持久化挂载。';
+    const setupLink = () => h('a', { href: 'https://github.com/mangfufu/dsh-comfyui-web#comfyui-extension-install', target: '_blank', rel: 'noopener noreferrer' }, '扩展安装说明');
     return h('section', { className: 'dsh-comfy', 'aria-label': 'ComfyUI 工作台' },
       h('style', null, CSS),
       h('div', { className: 'dsh-comfy-bar' },
-        h('span', { className: 'dsh-comfy-state', role: 'status' }, h('i', { className: 'dsh-comfy-dot' + (!mcpEnabled ? ' off' : ready ? ' ready' : '') }), !mcpEnabled ? 'MCP 已关闭' : ready ? 'MCP · 共享画布已连接' : '等待 ComfyUI'),
+        h('span', { className: 'dsh-comfy-state', role: 'status' }, h('i', { className: 'dsh-comfy-dot' + (!mcpEnabled ? ' off' : ready ? ' ready' : '') }), !mcpEnabled ? 'MCP 已关闭' : ready ? 'MCP · 共享画布已连接' : bridgeMissing ? 'AI 桥接扩展未连接' : '等待 ComfyUI'),
         h('div', { className: 'dsh-comfy-zoom', role: 'group', 'aria-label': 'ComfyUI 界面缩放' },
           h('button', { type: 'button', onClick: () => changeZoom(-0.05), disabled: zoom <= 0.5, 'aria-label': '缩小 ComfyUI 界面' }, '−'),
           h('button', { type: 'button', onClick: () => setZoom(1), title: '恢复 100% 大小', 'aria-label': '当前缩放 ' + Math.round(zoom * 100) + '%，点击恢复 100%' }, Math.round(zoom * 100) + '%'),
@@ -397,7 +411,8 @@ window.__ModuleLoader__.load({ id: 'dsh-comfyui-web', factory: require => {
         h('div', { className: 'dsh-comfy-settings-head' }, h('strong', null, 'ComfyUI MCP'),
           h('label', { className: 'dsh-comfy-switch' }, h('input', { type: 'checkbox', role: 'switch', checked: mcpEnabled, disabled: !connection || switching,
             onChange: e => toggleMcp(e.target.checked) }), switching ? '保存中…' : '开启 MCP')),
-        h('p', null, mcpEnabled ? 'MCP 已开启，当前对话的 AI 可直接读取、修改和运行画布。' : 'MCP 已关闭，仍可手动编辑和生成。'),
+        h('p', null, mcpEnabled ? bridgeSeen ? 'MCP 已开启，当前对话的 AI 可直接读取、修改和运行画布。' : 'MCP 已开启，等待桥接扩展连接后可操作画布。' : 'MCP 已关闭，仍可手动编辑和生成。'),
+        h('p', null, !bridgeSeen && installation?.status !== 'installed' ? installationHelp + ' ' : '', setupLink()),
         h('form', { onSubmit: connect },
           h('label', { htmlFor: 'comfy-url-' + clientId.current }, 'ComfyUI 地址'),
           h('input', { id: 'comfy-url-' + clientId.current, type: 'url', required: true, value: url, onChange: e => setUrl(e.target.value) }),
@@ -409,6 +424,7 @@ window.__ModuleLoader__.load({ id: 'dsh-comfyui-web', factory: require => {
             h('button', { type: 'button', onClick: copyConfig }, copied ? '已复制' : '复制配置'),
             h('p', null, 'dsh 已自动接入；这份配置可用于本机其他支持 MCP 的客户端。'))) : null) : null,
       error ? h('div', { className: 'dsh-comfy-note', role: 'alert' }, error) : null,
+      bridgeMissing ? h('div', { className: 'dsh-comfy-note', role: 'alert' }, installationHelp, ' ', setupLink()) : null,
       src ? h('div', { className: 'dsh-comfy-viewport' }, h('iframe', { key: epoch, ref: frame, className: 'dsh-comfy-frame', src,
         style: { width: (100 / zoom) + '%', height: (100 / zoom) + '%', transform: 'scale(' + zoom + ')' },
         title: 'ComfyUI 节点编辑与实时生成预览', allow: 'clipboard-read; clipboard-write; fullscreen', allowFullScreen: true,

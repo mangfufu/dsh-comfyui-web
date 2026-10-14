@@ -1,6 +1,6 @@
 {
   "name": "dsh-comfyui-web",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "description": "在 dsh 中编辑 ComfyUI 工作流、实时预览，并让 AI 操作当前节点图。",
   "repository": { "type": "git", "url": "git+https://github.com/mangfufu/dsh-comfyui-web.git" },
   "homepage": "https://github.com/mangfufu/dsh-comfyui-web#readme",
