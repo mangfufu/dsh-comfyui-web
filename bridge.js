@@ -9,6 +9,12 @@
   const bridgeBase = bootstrap.bridgeBase || location.origin;
   const query = new URLSearchParams(location.search);
   const embedded = !!(query.get('dsh_client') && query.get('dsh_session') && window.parent !== window);
+  let warnedWeakUUID = false;
+  const warnWeakUUID = reason => {
+    if (warnedWeakUUID) return;
+    warnedWeakUUID = true;
+    console.warn('[dsh-comfyui-bridge] Falling back to Math.random UUID generation:', reason);
+  };
   const randomHex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
   const randomUUID = () => {
     if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
@@ -18,7 +24,8 @@
         bytes = new Uint8Array(16);
         globalThis.crypto.getRandomValues(bytes);
       }
-    } catch {}
+    } catch (error) { warnWeakUUID(error?.message || 'crypto.getRandomValues failed'); }
+    if (!bytes) warnWeakUUID('Web Crypto is unavailable');
     const hex = bytes ? [...bytes].map(b => b.toString(16).padStart(2, '0')) : Array.from({ length: 16 }, randomHex);
     hex[6] = ((parseInt(hex[6], 16) & 0x0f) | 0x40).toString(16).padStart(2, '0');
     hex[8] = ((parseInt(hex[8], 16) & 0x3f) | 0x80).toString(16).padStart(2, '0');
