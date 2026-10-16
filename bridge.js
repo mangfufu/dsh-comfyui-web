@@ -9,13 +9,19 @@
   const bridgeBase = bootstrap.bridgeBase || location.origin;
   const query = new URLSearchParams(location.search);
   const embedded = !!(query.get('dsh_client') && query.get('dsh_session') && window.parent !== window);
+  const randomHex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, '0');
   const randomUUID = () => {
     if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
-    const bytes = new Uint8Array(16);
-    globalThis.crypto.getRandomValues(bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = [...bytes].map(b => b.toString(16).padStart(2, '0'));
+    let bytes;
+    try {
+      if (typeof globalThis.crypto?.getRandomValues === 'function') {
+        bytes = new Uint8Array(16);
+        globalThis.crypto.getRandomValues(bytes);
+      }
+    } catch {}
+    const hex = bytes ? [...bytes].map(b => b.toString(16).padStart(2, '0')) : Array.from({ length: 16 }, randomHex);
+    hex[6] = ((parseInt(hex[6], 16) & 0x0f) | 0x40).toString(16).padStart(2, '0');
+    hex[8] = ((parseInt(hex[8], 16) & 0x3f) | 0x80).toString(16).padStart(2, '0');
     return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
   };
   const clientId = embedded ? query.get('dsh_client') : randomUUID();
