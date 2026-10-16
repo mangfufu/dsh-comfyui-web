@@ -9,7 +9,16 @@
   const bridgeBase = bootstrap.bridgeBase || location.origin;
   const query = new URLSearchParams(location.search);
   const embedded = !!(query.get('dsh_client') && query.get('dsh_session') && window.parent !== window);
-  const clientId = embedded ? query.get('dsh_client') : crypto.randomUUID();
+  const randomUUID = () => {
+    if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = [...bytes].map(b => b.toString(16).padStart(2, '0'));
+    return `${hex[0]}${hex[1]}${hex[2]}${hex[3]}-${hex[4]}${hex[5]}-${hex[6]}${hex[7]}-${hex[8]}${hex[9]}-${hex[10]}${hex[11]}${hex[12]}${hex[13]}${hex[14]}${hex[15]}`;
+  };
+  const clientId = embedded ? query.get('dsh_client') : randomUUID();
   const sessionId = embedded ? query.get('dsh_session') : 'comfyui-external';
   let parentOrigin;
   if (embedded) { try { parentOrigin = new URL(document.referrer).origin; } catch { return; } }
@@ -131,7 +140,7 @@
     for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
     return String(hash >>> 0);
   }
-  const checkpoint = (app, label) => ({ id: crypto.randomUUID(), time: Date.now(), label, workflow: snapshot(app) });
+  const checkpoint = (app, label) => ({ id: randomUUID(), time: Date.now(), label, workflow: snapshot(app) });
   function workflowStore(app) {
     const store = app.extensionManager?.workflow;
     if (!store?.getWorkflowByPath || !store?.createNewTemporary) throw new Error('此 ComfyUI 前端未提供工作流标签页接口，请更新前端');
@@ -272,7 +281,7 @@
         const source = args.sourcePath ? store.getWorkflowByPath(args.sourcePath) : activeWorkflowOf(app);
         if (!source) throw new Error('源工作流不存在，请先 list_workflows');
         const data = await workflowData(app, source);
-        data.id = crypto.randomUUID(); delete data.revision;
+        data.id = randomUUID(); delete data.revision;
         const name = args.name || (source.filename || 'Workflow').replace(/\.json$/i, '') + ' (Copy)';
         if (typeof name !== 'string' || !name.trim() || name.length > 180 || /[\\/:*?"<>|\x00-\x1f]/.test(name) || /^\.+$/.test(name)) throw new Error('请使用不含路径分隔符的工作流名称');
         const workflow = store.createNewTemporary(name.replace(/\.json$/i, '') + '.json', data);
