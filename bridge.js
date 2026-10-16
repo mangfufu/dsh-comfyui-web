@@ -105,13 +105,18 @@
       app.graph.setDirtyCanvas(true, true);
     }
   }
-  async function syncWorkflow(app) {
+  async function syncWorkflow(app, { check = true } = {}) {
     const owner = activeWorkflowOf(app);
     if (!owner?.path) return;
-    if (owner !== syncOwner || owner.path !== syncPath) { syncOwner = owner; syncPath = owner.path; revision = 0; initialized = false; lastFingerprint = undefined; }
-    const workflow = snapshot(app); const current = fingerprint(workflow);
-    const changed = initialized && current !== lastFingerprint;
-    const update = await send('sync', { workflowKey: owner.path, revision, ...(!initialized || changed ? { workflow, fingerprint: current } : {}) });
+    if (owner !== syncOwner || owner.path !== syncPath) { syncOwner = owner; syncPath = owner.path; revision = 0; initialized = false; lastFingerprint = undefined; forceSync = true; }
+    // Detecting a change costs a whole serialize + fingerprint pass. When the graph has
+    // not moved we still send the sync — that POST is how this tab pulls other tabs'
+    // edits — but with an empty body, so the idle heartbeat carries no payload.
+    const push = forceSync || !initialized || (check && graphChanged(app));
+    let workflow, current;
+    if (push) { workflow = snapshot(app); current = fingerprint(workflow); }
+    const changed = workflow !== undefined && initialized && current !== lastFingerprint;
+    const update = await send('sync', { workflowKey: owner.path, revision, ...(workflow ? { workflow, fingerprint: current } : {}) });
     // A manual workflow switch can finish while the network request is pending.
     // Defer the response rather than applying it to the new tab or a loading graph.
     if (!graphReady(app) || activeWorkflowOf(app) !== owner) return;
@@ -122,8 +127,47 @@
       }
       if (fingerprint(update.workflow) !== current) await replaceCurrentWorkflow(app, update.workflow);
       lastFingerprint = fingerprint(snapshot(app));
-    } else lastFingerprint = current;
+    } else if (workflow) lastFingerprint = current;
+    forceSync = false;
+    noteGraphVersion(app);
     revision = update.revision; initialized = true;
+  }
+  // Idle cadence exists to drain commands if the SSE stream silently dies and to pull
+  // other tabs' edits; both are second-scale concerns. While the stream is open the
+  // page reports state through /state, so 750 ms buys nothing but POSTs.
+  const FAST_POLL_MS = 750, IDLE_POLL_MS = 4000;
+  let lastGraphVersion = null, forceSync = true;
+  const streamAlive = () => !!commandStream && commandStream.readyState === (EventSource.OPEN ?? 1);
+  const pollDelay = () => streamAlive() ? IDLE_POLL_MS : FAST_POLL_MS;
+  const graphVersionOf = app => {
+    try {
+      const graph = app?.graph;
+      if (!graph) return null;
+      if (typeof graph.version === 'function') return graph.version();
+      // Current front-ends expose the counter as graph._version (a getter backed by
+      // their change tracker, bumped from incrementVersion()); reading it is free.
+      return Number.isFinite(graph._version) ? graph._version : null;
+    } catch { return null; }
+  };
+  const noteGraphVersion = app => { lastGraphVersion = graphVersionOf(app); };
+  function graphChanged(app) {
+    const version = graphVersionOf(app);
+    // An unseen version baseline means we have no evidence yet: serialize.
+    if (version != null) return lastGraphVersion === null || version !== lastGraphVersion;
+    // Builds without a counter still flip isModified from their change tracker; an
+    // absent signal (fakes, exotic builds) is treated as "changed" and behaves as before.
+    return activeWorkflowOf(app)?.isModified !== false;
+  }
+  async function poll() {
+    if (busy || handlingCommands) { setTimeout(poll, pollDelay()); return; } busy = true;
+    try {
+      const ready = graphReady(appOf());
+      if (ready) await syncWorkflow(appOf());
+      const response = await send('poll', {});
+      notify({ ready, allowAI });
+      commandQueue.push(...response.commands || []);
+    } catch (e) { notify({ ready: false, error: e.message }); }
+    finally { busy = false; handleCommands(); setTimeout(poll, pollDelay()); }
   }
   const historyKey = app => 'dsh.comfyui.history.' + encodeURIComponent(location.origin + ':' + sessionId + ':' + activeWorkflowOf(app).path);
   function historyOf(app) {
@@ -369,17 +413,6 @@
       saveHistory(app, history); throw error;
     }
   }
-  async function poll() {
-    if (busy || handlingCommands) { setTimeout(poll, 750); return; } busy = true;
-    try {
-      const ready = graphReady(appOf());
-      if (ready) await syncWorkflow(appOf());
-      const response = await send('poll', {});
-      notify({ ready, allowAI });
-      commandQueue.push(...response.commands || []);
-    } catch (e) { notify({ ready: false, error: e.message }); }
-    finally { busy = false; handleCommands(); setTimeout(poll, 750); }
-  }
   async function handleCommands() {
     if (busy || handlingCommands) return;
     handlingCommands = true;
@@ -391,7 +424,8 @@
           try {
             if (graphReady(appOf())) await syncWorkflow(appOf());
             reply = { id: command.id, result: await execute(command) };
-            if (['update_nodes', 'bind_image', 'load_workflow', 'undo', 'redo', 'restore_edit', 'edit_graph', 'save_workflow', 'save_as_workflow', 'switch_workflow', 'new_workflow'].includes(command.action)) await syncWorkflow(appOf());
+            // A write must always be published, whatever the counter says about it.
+            if (['update_nodes', 'bind_image', 'load_workflow', 'undo', 'redo', 'restore_edit', 'edit_graph', 'save_workflow', 'save_as_workflow', 'switch_workflow', 'new_workflow'].includes(command.action)) { forceSync = true; await syncWorkflow(appOf()); }
           }
           catch (e) { reply = { id: command.id, error: e.message || String(e) }; }
           completed.set(command.id, reply);
@@ -411,14 +445,14 @@
       if (!response.ok || data.bridgeProtocol !== bridgeProtocol) throw new Error('同步代码已更新，请刷新 ComfyUI 页面');
       if (token !== data.token) { token = data.token; initialized = false; revision = 0; }
       const stream = commandStream = new EventSource(bridgeBase + '/__dsh_comfyui/commands?' + new URLSearchParams({ token, clientId, sessionId, bridgeProtocol }));
-      stream.onopen = () => { send('state', {}).catch(() => {}); };
+      stream.onopen = () => { forceSync = true; send('state', {}).catch(() => {}); };
       stream.onmessage = event => { try { commandQueue.push(...JSON.parse(event.data).commands || []); handleCommands(); } catch {} };
       stream.onerror = () => { stream.close(); reconnectTimer = setTimeout(connectCommands, 2000); };
     } catch (error) { notify({ ready: false, error: error.message }); reconnectTimer = setTimeout(connectCommands, 2000); }
   }
-  document.addEventListener?.('visibilitychange', () => { send('state', {}).catch(() => {}); handleCommands(); });
+  document.addEventListener?.('visibilitychange', () => { forceSync = true; send('state', {}).catch(() => {}); handleCommands(); });
   window.addEventListener('pagehide', () => { commandStream?.close(); clearTimeout(reconnectTimer); });
-  window.addEventListener('pageshow', event => { if (event.persisted) connectCommands(); });
+  window.addEventListener('pageshow', event => { if (event.persisted) { forceSync = true; connectCommands(); } });
   connectCommands();
   poll();
 })();
