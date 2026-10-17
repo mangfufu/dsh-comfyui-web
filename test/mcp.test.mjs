@@ -128,7 +128,7 @@ test('MCP endpoint authenticates, lists real tools, accepts calls, interoperates
   const noAuth = await fetch(runtime.frameOrigin + '/mcp', { method: 'POST', body: '{}' }); assert.equal(noAuth.status, 401);
   const foreign = await fetch(runtime.frameOrigin + '/mcp', { method: 'POST', headers: { Origin: 'https://example.com', Authorization: 'Bearer ' + runtime.token }, body: '{}' }); assert.equal(foreign.status, 403);
   const client = await connectMcp(runtime.frameOrigin + '/mcp', runtime.token);
-  assert.equal(client.initialized, true); assert.equal(client.tools.length, 27);
+  assert.equal(client.initialized, true); assert.equal(client.tools.length, 28);
   const failure = await client.rpc('tools/call', { name: 'get_workflow', arguments: {} }); assert.equal(failure.isError, true);
   const require = createRequire(import.meta.resolve('@deepseek-ai/dsh-mcp-client'));
   const { Client, StreamableHTTPClientTransport } = await import(pathToFileURL(require.resolve('@modelcontextprotocol/client')));
