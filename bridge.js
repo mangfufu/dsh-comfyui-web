@@ -470,6 +470,31 @@
         } catch (error) { await replaceCurrentWorkflow(app, before); throw error; }
         return { restored: true, nodes: nodes(app) };
       }
+      case 'audit_graph': return {
+        nodes: (app.graph._nodes || []).map(node => ({
+          id: String(node.id), type: node.type, title: node.title || '', mode: node.mode ?? 0,
+          // Which of these widgets actually owns its value is part of the answer: a DOM
+          // widget, a hidden one or a serialize:false widget may hold something the graph
+          // never sees, so the audit must be able to say "this value is not the source of truth".
+          widgets: (node.widgets || []).map(widget => {
+            const kind = widget.type === 'hidden' || widget.hidden === true || widget.options?.hidden === true ? 'hidden'
+              : widget.serialize === false || widget.options?.serialize === false ? 'shadowed'
+              : typeof widget.options?.setValue === 'function' || typeof widget.setValue === 'function' ? 'dom' : 'plain';
+            return {
+              name: widget.name, kind, type: widget.type,
+              value: typeof widget.value === 'string' && widget.value.length > 200 ? widget.value.slice(0, 200) + '…' : widget.value ?? null,
+              ...(Array.isArray(widget.options?.values) ? { shown: widget.options.values.slice(0, 40) } : {})
+            };
+          }),
+          inputs: (node.inputs || []).map(input => ({ name: input.name, type: input.type, link: input.link ?? null })),
+          outputs: (node.outputs || []).map(output => ({ name: output.name, type: output.type, links: output.links || [] })),
+          // A structured document in node.properties is what some packs render their
+          // editor from; while one is present, the widget value may not be what gets queued.
+          shadowDocs: Object.entries(node.properties || {})
+            .filter(([, value]) => value && typeof value === 'object' && Array.isArray(value.parts)).map(([key]) => key)
+        })),
+        linkCount: Object.keys(app.graph.links || {}).length
+      };
       case 'run': {
         const api = apiOf();
         if (!api?.queuePrompt) throw new Error('当前 ComfyUI 前端没有 queuePrompt 接口');
