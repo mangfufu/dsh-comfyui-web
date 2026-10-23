@@ -42,6 +42,10 @@ test('note_workflow advertises the delete path it actually serves', () => {
   // lib/notes.js so the refusal can quote the lines that do exist instead of a generic schema error.
   assert.equal(note.inputSchema.required, undefined);
   assert.equal(note.inputSchema.properties.note.minLength, undefined);
+  // The same tool records, lists and deletes, so the static hint has to cover the heaviest of the three:
+  // forget removes entries from usage-notes.json for good, and an MCP client that reads
+  // annotations.destructiveHint === false would classify it as a harmless write.
+  assert.equal(note.annotations.destructiveHint, true, 'permanent deletion is not a non-destructive write');
 });
 
 test('the audit filter is documented for the ops that really consume it', () => {
