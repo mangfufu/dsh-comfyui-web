@@ -10,7 +10,7 @@ Requires [dsh](https://github.com/deepseek-ai/deepseek-harness), pnpm, a local C
 
 | Plugin version | Supported dsh versions |
 | --- | --- |
-| `0.5.13`–`0.5.17` | `0.2.0-rc.2`, `0.2.1-rc.2` |
+| `0.5.13`–`0.5.18` | `0.2.0-rc.2`, `0.2.1-rc.2` |
 | `0.5.12` | `0.2.0-rc.2` |
 
 Both `engines.dsh` and the DSH peer dependencies declare the verified host versions, supporting compatibility checks in both host releases. Other DSH versions need separate validation. If a host upgrade reports an incompatibility, update the plugin first.
