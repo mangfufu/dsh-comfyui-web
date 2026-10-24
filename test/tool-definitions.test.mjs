@@ -33,6 +33,21 @@ test('list_nodes no longer advertises a writability pre-judgement', () => {
   assert.match(listed.description, /audit\(op=writes\)/);
   assert.match(listed.description, /verified/, 'per-write proof is the only authority');
 });
+test('note_workflow advertises the delete path it actually serves', () => {
+  const note = MCP_TOOLS.find(tool => tool.name === 'note_workflow');
+  assert.ok(note.inputSchema.properties.forget, 'a note that cannot be deleted is a note nobody dares to write');
+  assert.match(note.inputSchema.properties.forget.description, /删除/);
+  assert.match(note.description, /forget:true/, 'the tool description has to mention the escape hatch');
+  // note stays optional at the schema level: forget carries no line, and an empty string has to reach
+  // lib/notes.js so the refusal can quote the lines that do exist instead of a generic schema error.
+  assert.equal(note.inputSchema.required, undefined);
+  assert.equal(note.inputSchema.properties.note.minLength, undefined);
+  // The same tool records, lists and deletes, so the static hint has to cover the heaviest of the three:
+  // forget removes entries from usage-notes.json for good, and an MCP client that reads
+  // annotations.destructiveHint === false would classify it as a harmless write.
+  assert.equal(note.annotations.destructiveHint, true, 'permanent deletion is not a non-destructive write');
+});
+
 test('the audit filter is documented for the ops that really consume it', () => {
   // R8-H: the schema said 「仅 params 用」 while lib/mcp.js:92-93 hands `args.filter` to auditWrites as
   // well — every per-node census of round 8 was done with audit(op=writes, filter=<id>), i.e. against
