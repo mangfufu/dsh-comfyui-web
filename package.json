@@ -1,6 +1,6 @@
 {
   "name": "dsh-comfyui-web",
-  "version": "0.5.18",
+  "version": "0.5.19",
   "description": "在 dsh 中编辑 ComfyUI 工作流、实时预览，并让 AI 操作当前节点图。",
   "repository": { "type": "git", "url": "git+https://github.com/mangfufu/dsh-comfyui-web.git" },
   "homepage": "https://github.com/mangfufu/dsh-comfyui-web#readme",
@@ -9,10 +9,10 @@
   "main": "./lib/index.js",
   "exports": { ".": "./lib/index.js", "./client": "./client.js", "./package.json": "./package.json" },
   "scripts": { "test": "node --test test/*.test.mjs" },
-  "engines": { "node": ">=22", "dsh": "0.2.0-rc.2 || 0.2.1-rc.2" },
-  "peerDependencies": { "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2 || 0.2.1-rc.2", "@deepseek-ai/dsh-tool-jobs": "0.2.0-rc.2 || 0.2.1-rc.2" },
+  "engines": { "node": ">=22", "dsh": "0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.2-rc.1" },
+  "peerDependencies": { "@deepseek-ai/dsh-mcp-client": "0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.2-rc.1", "@deepseek-ai/dsh-tool-jobs": "0.2.0-rc.2 || 0.2.1-rc.2 || 0.2.2-rc.1" },
   "devDependencies": { "@deepseek-ai/dsh-jobs-local": "0.2.1-rc.2", "semver": "^7.7.2" },
-  "dshTarget": "0.2.1-rc.2",
+  "dshTarget": "0.2.2-rc.1",
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {

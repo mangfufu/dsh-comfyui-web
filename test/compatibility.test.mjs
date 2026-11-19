@@ -12,10 +12,10 @@ test('both DSH compatibility policies accept the tested hosts and reject unteste
     .map(([, range]) => range)];
   for (const range of ranges) {
     assert.ok(semver.validRange(range), `invalid range: ${range}`);
-    for (const version of ['0.2.0-rc.2', '0.2.1-rc.2']) {
+    for (const version of ['0.2.0-rc.2', '0.2.1-rc.2', '0.2.2-rc.1']) {
       assert.equal(semver.satisfies(version, range, { includePrerelease: true }), true, `${version}: ${range}`);
     }
-    for (const version of ['0.1.0', '0.2.1-alpha.5', '0.2.2-rc.1', '0.3.0']) {
+    for (const version of ['0.1.0', '0.2.1-alpha.5', '0.2.2-rc.5', '0.3.0']) {
       assert.equal(semver.satisfies(version, range, { includePrerelease: true }), false, `${version}: ${range}`);
     }
   }

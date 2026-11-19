@@ -10,6 +10,7 @@ Requires [dsh](https://github.com/deepseek-ai/deepseek-harness), pnpm, a local C
 
 | Plugin version | Supported dsh versions |
 | --- | --- |
+| `0.5.19` | `0.2.0-rc.2`, `0.2.1-rc.2`, `0.2.2-rc.1` |
 | `0.5.13`–`0.5.18` | `0.2.0-rc.2`, `0.2.1-rc.2` |
 | `0.5.12` | `0.2.0-rc.2` |
 
